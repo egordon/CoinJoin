@@ -60,8 +60,8 @@ public class HttpsAPI {
 	/**
 	 * If the transaction is SIGNING, verify the signed input, then add the
 	 * 	input to the transaction and remove the unsigned input. If all inputs
-	 * 	are signed. Broadcast the transaction and remove it from memory.
-	 * @param output: Write the status of the Transaction (OPEN, PENDING, SIGNING, FAILED, CLEARED)
+	 * 	are signed. Broadcast the transaction and set its stateto BROADCAST.
+	 * @param output: Write the status of the Transaction (OPEN, PENDING, SIGNING, FAILED, BROADCAST, CLEARED)
 	 * 	and an error message.
 	 * @param txid: Transaction ID
 	 * @param signedInput: Signed Input for the Transaction
@@ -74,7 +74,7 @@ public class HttpsAPI {
 	
 	/**
 	 * Return the transaction status. If the transaction doesn't exist, its status is CLEARED.
-	 * @param output: Write the Status of the transaction (OPEN, PENDING, SIGNING, FAILED, CLEARED)
+	 * @param output: Write the Status of the transaction (OPEN, PENDING, SIGNING, FAILED, BROADCAST, CLEARED)
 	 * 	and an optional error message.
 	 * @param txid: Transaction ID
 	 * @return HTTP Status (200 on Success)

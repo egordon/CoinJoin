@@ -14,6 +14,7 @@ public class HttpsListener extends Thread {
 	 */
 	public HttpsListener(int newPort) {
 		this.port = newPort;
+		System.out.println("Starting HTTPS Server on Port: " + port);
 	}
 	
 	/**
