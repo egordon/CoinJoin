@@ -5,6 +5,8 @@ import java.io.IOException;
 import java.security.KeyPair;
 import java.util.HashMap;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 import org.bitcoinj.core.BlockChain;
 import org.bitcoinj.core.NetworkParameters;
@@ -33,6 +35,8 @@ public class MainServer {
 		public Transaction tx;
 		public KeyPair rsa;
 		public TxStatus status;
+		public Lock mutex;
+		public int statusTime;
 	}
 	
 	// Map TXIDs to Transactions
@@ -105,6 +109,8 @@ public class MainServer {
 		currentTx.rsa = BlindSignUtil.freshRSAKeyPair();
 		currentTx.status = TxStatus.OPEN;
 		currentTx.tx = new Transaction(params);
+		currentTx.mutex = new ReentrantLock();
+		currentTx.statusTime = 0;
 		
 		transactionMap.put(currentTx.rsa.getPublic().hashCode(), currentTx);
 		
@@ -121,6 +127,27 @@ public class MainServer {
 			 * 6. If the confidence level of a BROADCAST transaction is high, erase it
 			 * 	from memory.
 			 */
+			
+			for(TxWrapper wrapper : transactionMap.values()) {
+				wrapper.mutex.lock();
+				try {
+					switch(wrapper.status) {
+					case OPEN:
+						break;
+					case PENDING:
+						break;
+					case SIGNING:
+						break;
+					case FAILED:
+						break;
+					case BROADCAST:
+						break;
+					}
+					
+				} finally {
+					wrapper.mutex.unlock();
+				}
+			}
 			
 			
 			try {
