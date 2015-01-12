@@ -22,6 +22,7 @@ import org.coinjoin.rsa.BlindSignUtil;
 public class MainServer {
 
 	public final static double CHUNK_SIZE = 0.01;
+	public final static int MIN_PARTICIPANTS = 3;
 	private final static NetworkParameters params = new TestNet3Params();
 	
 	public enum TxStatus {
@@ -95,7 +96,7 @@ public class MainServer {
 	 * @param txid: The ID of a fully signed CoinJoin transaction.
 	 * @return: null on Success, or an Error Message
 	 */
-	public String finalizeTransaction(String txid) {
+	public String broadcastTransaction(String txid) {
 		// TODO: complete
 		return null;
 	}
@@ -117,12 +118,11 @@ public class MainServer {
 		// Main Server Loop, executed once per second
 		while (!finished) {
 			/*
-			 * TODO:
 			 * 1. Loop through Transactions, locking each one.
 			 * 2. If transaction is OPEN and has at least 3 participants, mark it PENDING,
 			 * 		and create a new OPEN transaction.
 			 * 3. If transaction has been PENDING for 5 seconds, mark it FAILED.
-			 * 4. If transaction has been SIGNING for 10 seconds, mark it FAILED.
+			 * 4. If transaction has been SIGNING for 5 seconds, mark it FAILED.
 			 * 5. If transaction has been FAILED for 5 seconds, erase it from memory.
 			 * 6. If the confidence level of a BROADCAST transaction is high, erase it
 			 * 	from memory.
@@ -133,14 +133,50 @@ public class MainServer {
 				try {
 					switch(wrapper.status) {
 					case OPEN:
+						if (wrapper.tx.getInputs().size() > MIN_PARTICIPANTS) {
+							wrapper.status = TxStatus.PENDING;
+							
+							// Create New Open Transaction
+							currentTx = new TxWrapper();
+							
+							currentTx.rsa = BlindSignUtil.freshRSAKeyPair();
+							currentTx.status = TxStatus.OPEN;
+							currentTx.tx = new Transaction(params);
+							currentTx.mutex = new ReentrantLock();
+							currentTx.statusTime = 0;
+							
+							transactionMap.put(currentTx.rsa.getPublic().hashCode(), currentTx);
+						}
 						break;
 					case PENDING:
+						if (wrapper.statusTime >= 5)
+							wrapper.status = TxStatus.FAILED;
+						else wrapper.statusTime++;
 						break;
 					case SIGNING:
+						if (wrapper.statusTime >= 5)
+							wrapper.status = TxStatus.FAILED;
+						else wrapper.statusTime++;
 						break;
 					case FAILED:
+						if (wrapper.statusTime >= 5) {
+							transactionMap.remove(wrapper.rsa.getPublic().hashCode());
+						}
+						else wrapper.statusTime++;
 						break;
 					case BROADCAST:
+						switch(wrapper.tx.getConfidence().getConfidenceType()) {
+						case BUILDING: // Transaction Succeeded!
+							transactionMap.remove(wrapper.rsa.getPublic().hashCode());
+							break;
+						case DEAD: // Transaction Failed
+							wrapper.status = TxStatus.FAILED;
+							break;
+						default:
+							break;
+						}
+						break;
+					default:
 						break;
 					}
 					
@@ -163,17 +199,18 @@ public class MainServer {
 	 * @param txid: Transaction ID
 	 * @return TxWrapper corresponding to transaction id.
 	 */
-	public TxWrapper lockTransaction(String txid) {
-		// TODO: Complete
-		return null;
+	public TxWrapper lockTransaction(int txid) {
+		TxWrapper wrapper = transactionMap.get(txid);
+		wrapper.mutex.lock();
+		return wrapper;
 	}
 	
 	/**
 	 * Unlocks transaction so it can be used by another thread.
 	 * @param txid: Transaction ID
 	 */
-	public void releaseTransaction(String txid) {
-		// TODO: Complete
+	public void releaseTransaction(TxWrapper wrapper) {
+		wrapper.mutex.unlock();
 	}
 	
 	public static void main(String[] args) {
