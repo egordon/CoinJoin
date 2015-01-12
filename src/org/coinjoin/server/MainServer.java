@@ -1,6 +1,7 @@
 package org.coinjoin.server;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.security.KeyPair;
 import java.util.ArrayList;
@@ -10,6 +11,7 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 import org.bitcoinj.core.BlockChain;
+import org.bitcoinj.core.CheckpointManager;
 import org.bitcoinj.core.Coin;
 import org.bitcoinj.core.NetworkParameters;
 import org.bitcoinj.core.PeerGroup;
@@ -20,6 +22,7 @@ import org.bitcoinj.core.TransactionOutput;
 import org.bitcoinj.core.Wallet;
 import org.bitcoinj.core.Wallet.SendRequest;
 import org.bitcoinj.params.TestNet3Params;
+import org.bitcoinj.store.BlockStore;
 import org.bitcoinj.store.BlockStoreException;
 import org.bitcoinj.store.SPVBlockStore;
 import org.bitcoinj.store.UnreadableWalletException;
@@ -82,13 +85,21 @@ public class MainServer {
 			System.out.println("Creating new wallet.");
 			wallet = new Wallet(params);	
 		}
-		wallet.autosaveToFile(walletFile, 1000, TimeUnit.MILLISECONDS, null);
+		wallet.autosaveToFile(walletFile, 1, TimeUnit.MINUTES, null);
 		
 		// Set Up Local SPV BlockChain and BlockStore
 		System.out.println("Setting up blockchain from File: " + blockFile.getName());
 		try {
-			bChain = new BlockChain(params, wallet, new SPVBlockStore(params, blockFile));
-		} catch (BlockStoreException e) {
+			boolean chainExistedAlready = blockFile.exists();
+			BlockStore blockStore = new SPVBlockStore(params, blockFile);
+			if (!chainExistedAlready) {
+			    File checkpointsFile = new File("checkpoints.dat");    // Replace path to the file here.
+			    FileInputStream stream = new FileInputStream(checkpointsFile);
+			    CheckpointManager.checkpoint(params, stream, blockStore, wallet.getEarliestKeyCreationTime());
+			}
+			bChain = new BlockChain(params, wallet, blockStore);
+			
+		} catch (BlockStoreException | IOException e) {
 			e.printStackTrace();
 			try {
 				wallet.saveToFile(walletFile);
@@ -102,7 +113,7 @@ public class MainServer {
 		System.out.println("Setting Up PeerGroup Connections...");
 		peerGroup = new PeerGroup(params, bChain);
 		peerGroup.addWallet(wallet);
-		peerGroup.start();
+		peerGroup.startAndWait();
 		
 		System.out.println("Bitcoin Initialized! Send Fee Donations to: " + wallet.currentReceiveAddress().toString());
 		
@@ -301,7 +312,7 @@ public class MainServer {
 		try {
 			wallet.saveToFile(walletFile);
 			System.out.println("Saved wallet to File: " + walletFile.getAbsolutePath());
-			peerGroup.stopAndWait();
+			peerGroup.stop();
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
