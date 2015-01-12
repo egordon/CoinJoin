@@ -1,8 +1,5 @@
 package org.coinjoin.server;
 
-import java.io.IOException;
-import java.io.ObjectOutputStream;
-
 import org.bitcoinj.core.Address;
 import org.bitcoinj.core.Coin;
 import org.bitcoinj.core.TransactionInput;
@@ -20,24 +17,28 @@ public class SSLAPI {
 	 * @param output: Write the RSA Public Key for a currently OEPN transaction.
 	 * 	and the ID of that transaction.
 	 * @return Status
-	 * @throws IOException 
+	 * @  
 	 */
-	public static SSLStatus getPublicRSA(ObjectOutputStream output) throws IOException{
+	public static SSLResponse getPublicRSA()  {
+		SSLResponse response = new SSLResponse();
 		Integer currentOpenID = server.currentOpenID();
 		if (currentOpenID == null) {
-			output.writeObject("Error: no currently open transaction. Please try again later.");
-			return SSLStatus.ERR_SERVER;
+			response.retObjects.add("Error: no currently open transaction. Please try again later.");
+			response.retStatus = SSLStatus.ERR_SERVER;
+			return response;
 		}
 		TxWrapper currentOpen = server.lockTransaction(currentOpenID);
 		if (currentOpen == null) {
-			output.writeObject("Error: transaction does not exist");
-			return SSLStatus.ERR_CLIENT;
+			response.retObjects.add("Error: transaction does not exist");
+			response.retStatus = SSLStatus.ERR_CLIENT;
+			return response;
 		}
-		output.writeObject(currentOpen.rsa.getPublic());
+		response.retObjects.add(currentOpen.rsa.getPublic());
 		
 		
 		server.releaseTransaction(currentOpen);
-		return SSLStatus.OK;
+		response.retStatus = SSLStatus.OK;
+		return response;
 	};
 	
 	/**
@@ -52,24 +53,28 @@ public class SSLAPI {
 	 * @param output: Write RSA signed output address if successful.
 	 * @return Status
 	 */
-	public static SSLStatus registerInput(ObjectOutputStream output, int txid, 
-			TransactionOutput inputBuilder, TransactionOutput changeOut, byte[] blindedOutput) throws IOException{
+	public static SSLResponse registerInput(int txid, 
+			TransactionOutput inputBuilder, TransactionOutput changeOut, byte[] blindedOutput)  {
+		SSLResponse response = new SSLResponse();
 		
 		// Check that input/change address add up to CHUNK_SIZE or bigger
 		if(inputBuilder.getValue().subtract(changeOut.getValue()).value < MainServer.CHUNK_SIZE) {
-			output.writeObject("Error: Input and change address do not add upt to chunk size.");
-			return SSLStatus.ERR_CLIENT;
+			response.retObjects.add("Error: Input and change address do not add upt to chunk size.");
+			response.retStatus = SSLStatus.ERR_CLIENT;
+			return response;
 		}
 		
 		// Check that transaction is open
 		TxWrapper wrapper = server.lockTransaction(txid);
 		if (wrapper == null) {
-			output.writeObject("Error: transaction does not exist.");
-			return SSLStatus.ERR_CLIENT;
+			response.retObjects.add("Error: transaction does not exist.");
+			response.retStatus = SSLStatus.ERR_CLIENT;
+			return response;
 		} else if (wrapper.status != TxStatus.OPEN) {
-			output.writeObject("Error: transaction is not longer open.");
+			response.retObjects.add("Error: transaction is not longer open.");
 			server.releaseTransaction(wrapper);
-			return SSLStatus.ERR_SERVER;
+			response.retStatus = SSLStatus.ERR_SERVER;
+			return response;
 		}
 		
 		// Add Input and Output to Transaction and write signed output
@@ -77,10 +82,11 @@ public class SSLAPI {
 		wrapper.tx.addOutput(changeOut);
 		
 		byte[] retSig = RSABlindSignUtil.signData(wrapper.rsa.getPrivate(), blindedOutput);
-		output.write(retSig);
+		response.retObjects.add(retSig);
 		
 		server.releaseTransaction(wrapper);
-		return SSLStatus.OK;
+		response.retStatus = SSLStatus.OK;
+		return response;
 	};
 	
 	/**
@@ -102,24 +108,28 @@ public class SSLAPI {
 	 * @param outputSig: RSA Signature of the Output Address.
 	 * @return Status
 	 */
-	public static SSLStatus registerOutput(ObjectOutputStream output, int txid, Address outputAddr, byte[] outputSig) throws IOException{
+	public static SSLResponse registerOutput(int txid, Address outputAddr, byte[] outputSig)  {
+		SSLResponse response = new SSLResponse();
 		
 		// Check Transaction Status
 		TxWrapper wrapper = server.lockTransaction(txid);
 		if (wrapper == null) {
-			output.writeObject("Error: transaction does not exist.");
-			return SSLStatus.ERR_CLIENT;
+			response.retObjects.add("Error: transaction does not exist.");
+			response.retStatus = SSLStatus.ERR_CLIENT;
+			return response;
 		} else if (wrapper.status == TxStatus.OPEN || wrapper.status == TxStatus.FAILED) {
-			output.writeObject("Error: transaction is not PENDING or SIGNING.");
+			response.retObjects.add("Error: transaction is not PENDING or SIGNING.");
 			server.releaseTransaction(wrapper);
-			return SSLStatus.ERR_SERVER;
+			response.retStatus = SSLStatus.ERR_SERVER;
+			return response;
 		}
 		
 		// Check Output Signature
 		if (!RSABlindSignUtil.verifyData(wrapper.rsa.getPublic(), outputAddr.getHash160(), outputSig)) {
-			output.writeObject("Error: Signature does not match given txid.");
+			response.retObjects.add("Error: Signature does not match given txid.");
 			server.releaseTransaction(wrapper);
-			return SSLStatus.ERR_CLIENT;
+			response.retStatus = SSLStatus.ERR_CLIENT;
+			return response;
 		}
 		
 		// If PENDING, add output to transaction.
@@ -131,9 +141,10 @@ public class SSLAPI {
 				if (err != null) {
 					wrapper.status = TxStatus.FAILED;
 					System.err.println("Error: Not enough fee for transaction.");
-					output.writeObject("Error: transaction has FAILED.");
+					response.retObjects.add("Error: transaction has FAILED.");
 					server.releaseTransaction(wrapper);
-					return SSLStatus.ERR_SERVER;
+					response.retStatus = SSLStatus.ERR_SERVER;
+					return response;
 				}
 				wrapper.status = TxStatus.SIGNING;
 			}
@@ -141,11 +152,12 @@ public class SSLAPI {
 		
 		// If SIGNING, return full transaction.
 		if (wrapper.status == TxStatus.SIGNING) {
-			output.writeObject(wrapper.tx);
+			response.retObjects.add(wrapper.tx);
 		}
 		
 		server.releaseTransaction(wrapper);
-		return SSLStatus.OK;
+		response.retStatus = SSLStatus.OK;
+		return response;
 	}
 	
 	/**
@@ -158,18 +170,21 @@ public class SSLAPI {
 	 * @param signedInput: Signed Input for the Transaction
 	 * @return HTTP Status (200 on Success)
 	 */
-	public static SSLStatus registerSignature(ObjectOutputStream output, int txid, int inputIndex, TransactionInput signedInput) throws IOException{
+	public static SSLResponse registerSignature(int txid, int inputIndex, TransactionInput signedInput)  {
+		SSLResponse response = new SSLResponse();
 		// Check Transaction Status
 		TxWrapper wrapper = server.lockTransaction(txid);
 		if (wrapper == null) {
-			output.writeObject(TxStatus.CLEARED);
-			output.writeObject("Transaction doesn't exist or has been cleared.");
-			return SSLStatus.ERR_CLIENT;
+			response.retObjects.add(TxStatus.CLEARED);
+			response.retObjects.add("Transaction doesn't exist or has been cleared.");
+			response.retStatus = SSLStatus.ERR_CLIENT;
+			return response;
 		} else if (wrapper.status != TxStatus.SIGNING) {
-			output.writeObject(wrapper.status);
-			output.writeObject("Error: transaction is not SIGNING.");
+			response.retObjects.add(wrapper.status);
+			response.retObjects.add("Error: transaction is not SIGNING.");
 			server.releaseTransaction(wrapper);
-			return SSLStatus.ERR_SERVER;
+			response.retStatus = SSLStatus.ERR_SERVER;
+			return response;
 		}
 		
 		// Add signature to current transaction
@@ -179,10 +194,11 @@ public class SSLAPI {
 			unsigned.verify();
 		} catch (Exception e) {
 			e.printStackTrace();
-			output.writeObject(wrapper.status);
-			output.writeObject("Error: signature invalid.");
+			response.retObjects.add(wrapper.status);
+			response.retObjects.add("Error: signature invalid.");
 			server.releaseTransaction(wrapper);
-			return SSLStatus.ERR_CLIENT;
+			response.retStatus = SSLStatus.ERR_CLIENT;
+			return response;
 		}
 		
 		wrapper.signedInputs++;
@@ -193,18 +209,20 @@ public class SSLAPI {
 			if (err != null) {
 				wrapper.status = TxStatus.FAILED;
 				System.err.println("Broadcast Error: " + err);
-				output.writeObject("Error: transaction has FAILED.");
+				response.retObjects.add("Error: transaction has FAILED.");
 				server.releaseTransaction(wrapper);
-				return SSLStatus.ERR_SERVER;
+				response.retStatus = SSLStatus.ERR_SERVER;
+				return response;
 			}
 			wrapper.status = TxStatus.BROADCAST;
 		}
 		
 		// Write status and success message.
-		output.writeObject(wrapper.status);
-		output.writeObject("Success");
+		response.retObjects.add(wrapper.status);
+		response.retObjects.add("Success");
 		server.releaseTransaction(wrapper);
-		return SSLStatus.OK;
+		response.retStatus = SSLStatus.OK;
+		return response;
 	}
 	
 	/**
@@ -213,14 +231,16 @@ public class SSLAPI {
 	 * @param txid: Transaction ID
 	 * @return Status
 	 */
-	public static SSLStatus txidStatus(ObjectOutputStream output, int txid) throws IOException {
+	public static SSLResponse txidStatus(int txid)   {
+		SSLResponse response = new SSLResponse();
 		TxWrapper wrapper = server.lockTransaction(txid);
 		if (wrapper == null) {
-			output.writeObject(TxStatus.CLEARED);
-		} else output.writeObject(wrapper.status);
+			response.retObjects.add(TxStatus.CLEARED);
+		} else response.retObjects.add(wrapper.status);
 		
 		server.releaseTransaction(wrapper);
-		return SSLStatus.OK;
+		response.retStatus = SSLStatus.OK;
+		return response;
 	}
 
 }

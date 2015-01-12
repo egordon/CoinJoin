@@ -2,6 +2,8 @@ package org.coinjoin.util;
 
 import java.math.BigInteger;
 import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.SecureRandom;
@@ -11,15 +13,22 @@ import java.security.interfaces.RSAPublicKey;
 public class RSABlindSignUtil {
 	
 	private static SecureRandom random;
+	private static KeyPairGenerator kpg;
 	
 	static {
 		// Initialize RSA KeyPair Generator and RNG
 		random = new SecureRandom();
+		try {
+			kpg = KeyPairGenerator.getInstance("RSA");
+		} catch (NoSuchAlgorithmException e) {
+			e.printStackTrace();
+			System.exit(1);
+		}
+		kpg.initialize(2048);
 	}
 	
 	public static KeyPair freshRSAKeyPair() {
-		// TODO: Complete
-		return null;
+		return kpg.genKeyPair();
 	}
 	
 	/**
