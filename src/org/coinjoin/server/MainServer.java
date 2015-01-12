@@ -31,6 +31,8 @@ public class MainServer {
 	public final static int MIN_PARTICIPANTS = 3;
 	private final static NetworkParameters params = new TestNet3Params();
 	
+	private boolean finished;
+	
 	public enum TxStatus {
 	    OPEN, PENDING, SIGNING, FAILED, BROADCAST, CLEARED
 	}
@@ -57,28 +59,33 @@ public class MainServer {
 	private PeerGroup peerGroup;
 	private Wallet wallet;
 	private BlockChain bChain;
+	private File walletFile;
 	
 	
 	@SuppressWarnings("deprecation")
 	public MainServer(int port, File walletFile, File blockFile) {
 		httpsServer = new SSLListener(port);
 		transactionMap = new HashMap<Integer, TxWrapper>();
+		this.walletFile = walletFile;
 		
 		// Set up Local Wallet
 		wallet = null;
 		if (walletFile.exists())
 			try {
+				System.out.println("Reading Wallet from File: " + walletFile.getName());
 				wallet = Wallet.loadFromFile(walletFile);
 			} catch (UnreadableWalletException e1) {
 				e1.printStackTrace();
 				System.exit(1);
 			}
 		else {
-			wallet = new Wallet(params);
-			wallet.autosaveToFile(walletFile, 1000, TimeUnit.MILLISECONDS, null);
+			System.out.println("Creating new wallet.");
+			wallet = new Wallet(params);	
 		}
+		wallet.autosaveToFile(walletFile, 1000, TimeUnit.MILLISECONDS, null);
 		
 		// Set Up Local SPV BlockChain and BlockStore
+		System.out.println("Setting up blockchain from File: " + blockFile.getName());
 		try {
 			bChain = new BlockChain(params, wallet, new SPVBlockStore(params, blockFile));
 		} catch (BlockStoreException e) {
@@ -92,9 +99,12 @@ public class MainServer {
 		}
 		
 		// Create PeerGroup to connect to BTC Network
+		System.out.println("Setting Up PeerGroup Connections...");
 		peerGroup = new PeerGroup(params, bChain);
 		peerGroup.addWallet(wallet);
 		peerGroup.start();
+		
+		System.out.println("Bitcoin Initialized! Send Fee Donations to: " + wallet.currentReceiveAddress().toString());
 		
 	}
 	
@@ -170,7 +180,7 @@ public class MainServer {
 	
 	public void start() {
 		httpsServer.start();
-		boolean finished = false;
+		finished = false;
 		
 		TxWrapper currentTx = new TxWrapper();
 		
@@ -284,11 +294,32 @@ public class MainServer {
 		wrapper.mutex.unlock();
 	}
 	
+	@SuppressWarnings("deprecation")
+	public void shutdown() {
+		finished = true;
+		// Shutdown Services
+		try {
+			wallet.saveToFile(walletFile);
+			System.out.println("Saved wallet to File: " + walletFile.getAbsolutePath());
+			peerGroup.stopAndWait();
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+	}
+	
 	public static void main(String[] args) {
 		
-		
-		MainServer server = new MainServer(443, new File("wallet.dat"), new File("blockchain.dat"));
+		final MainServer server = new MainServer(4444, new File("wallet.dat"), new File("blockchain.dat"));
 		SSLAPI.server = server;
+		
+		Runtime.getRuntime().addShutdownHook(new Thread()
+        {
+            @Override
+            public void run()
+            {
+                server.shutdown();
+            }
+        });
 		
 		server.start();
 	}

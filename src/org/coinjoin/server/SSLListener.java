@@ -35,7 +35,6 @@ public class SSLListener extends Thread {
 	 */
 	public SSLListener(int newPort) {
 		this.port = newPort;
-		System.out.println("Starting Server on Port: " + port);
 	}
 	
 	/**
@@ -44,6 +43,7 @@ public class SSLListener extends Thread {
 	 */
 	@Override
 	public void run() {
+		System.out.println("Starting SSL Server on: " + port);
 		SSLServerSocket sslserversocket = null;
 		SSLServerSocketFactory sslserversocketfactory = null;
 		try {
@@ -95,6 +95,7 @@ public class SSLListener extends Thread {
 		 */
 		@Override
 		public void run() {
+			System.out.println("Established connection...");
 			ObjectInputStream ois = null;
 			ObjectOutputStream oos = null;
 			SSLResponse response;
@@ -104,6 +105,7 @@ public class SSLListener extends Thread {
 				oos = new ObjectOutputStream(socket.getOutputStream());
 				
 				APICall call = (APICall) ois.readObject();
+				System.out.println("Received " + call.toString() + " API Call...");
 				
 				// Call API Function
 				switch(call) {
@@ -143,6 +145,7 @@ public class SSLListener extends Thread {
 			}
 			
 			try {
+				System.out.println("Response Status: " + response.retStatus.toString());
 				// Return Response
 				oos.writeObject(response.retStatus);
 				for (Object obj : response.retObjects) {
