@@ -27,7 +27,7 @@ import org.coinjoin.util.RSABlindSignUtil;
 
 public class MainServer {
 
-	public final static double CHUNK_SIZE = 1000000;
+	public final static long CHUNK_SIZE = 1000000;
 	public final static int MIN_PARTICIPANTS = 3;
 	private final static NetworkParameters params = new TestNet3Params();
 	
@@ -44,6 +44,8 @@ public class MainServer {
 		public TxStatus status;
 		public Lock mutex;
 		public int statusTime;
+		public int regOutputs;
+		public int signedInputs;
 	}
 	
 	// Map TXIDs to Transactions
@@ -177,6 +179,8 @@ public class MainServer {
 		currentTx.tx = new Transaction(params);
 		currentTx.mutex = new ReentrantLock();
 		currentTx.statusTime = 0;
+		currentTx.regOutputs = 0;
+		currentTx.signedInputs = 0;
 		
 		transactionMap.put(currentTx.rsa.getPublic().hashCode(), currentTx);
 		
@@ -209,6 +213,8 @@ public class MainServer {
 							currentTx.tx = new Transaction(params);
 							currentTx.mutex = new ReentrantLock();
 							currentTx.statusTime = 0;
+							currentTx.regOutputs = 0;
+							currentTx.signedInputs = 0;
 							
 							transactionMap.put(currentTx.rsa.getPublic().hashCode(), currentTx);
 						}
