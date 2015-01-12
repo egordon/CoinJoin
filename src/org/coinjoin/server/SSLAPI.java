@@ -134,25 +134,37 @@ public class SSLAPI {
 		
 		// If PENDING, add output to transaction.
 		if (wrapper.status == TxStatus.PENDING) {
-			wrapper.tx.addOutput(Coin.valueOf(MainServer.CHUNK_SIZE), outputAddr);
-			wrapper.regOutputs++;
-			if (wrapper.regOutputs >= wrapper.tx.getInputs().size()) {
-				String err = server.feeTransaction(wrapper);
-				if (err != null) {
-					wrapper.status = TxStatus.FAILED;
-					System.err.println("Error: Not enough fee for transaction.");
-					response.retObjects.add("Error: transaction has FAILED.");
-					server.releaseTransaction(wrapper);
-					response.retStatus = SSLStatus.ERR_SERVER;
-					return response;
+			// Check for Duplicates
+			boolean isDuplicate = false;
+			for (TransactionOutput t : wrapper.tx.getOutputs()) {
+				if (t.getAddressFromP2PKHScript(t.getParams()).equals(outputAddr)) {
+					isDuplicate = true;
+					break;
 				}
-				wrapper.status = TxStatus.SIGNING;
+			}
+			if (!isDuplicate) {
+				wrapper.tx.addOutput(Coin.valueOf(MainServer.CHUNK_SIZE), outputAddr);
+				wrapper.regOutputs++;
+				if (wrapper.regOutputs >= wrapper.tx.getInputs().size()) {
+					String err = server.feeTransaction(wrapper);
+					if (err != null) {
+						wrapper.status = TxStatus.FAILED;
+						System.err.println("Error: Not enough fee for transaction.");
+						response.retObjects.add("Error: transaction has FAILED.");
+						server.releaseTransaction(wrapper);
+						response.retStatus = SSLStatus.ERR_SERVER;
+						return response;
+					}
+					wrapper.status = TxStatus.SIGNING;
+				}
 			}
 		}
 		
 		// If SIGNING, return full transaction.
 		if (wrapper.status == TxStatus.SIGNING) {
 			response.retObjects.add(wrapper.tx);
+		} else {
+			response.retObjects.add(null);
 		}
 		
 		server.releaseTransaction(wrapper);
