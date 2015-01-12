@@ -6,15 +6,23 @@ package org.coinjoin.server;
  * Listens on provided port for HTTPS requests, 
  * and directs them to the corresponding api function.
  */
-public class HttpsListener extends Thread {
+public class SSLListener extends Thread {
 	private int port;
+	
+	public static enum SSLStatus {
+		OK, ERR_CLIENT, ERR_SERVER
+	}
+	
+	public static enum APICall {
+		GET_RSA, REG_IN, REG_OUT, REG_SIGN, STATUS
+	}
 	
 	/**
 	 * @param newPort on which to listen for connections
 	 */
-	public HttpsListener(int newPort) {
+	public SSLListener(int newPort) {
 		this.port = newPort;
-		System.out.println("Starting HTTPS Server on Port: " + port);
+		System.out.println("Starting Server on Port: " + port);
 	}
 	
 	/**

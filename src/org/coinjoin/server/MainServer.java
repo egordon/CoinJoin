@@ -3,25 +3,31 @@ package org.coinjoin.server;
 import java.io.File;
 import java.io.IOException;
 import java.security.KeyPair;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 import org.bitcoinj.core.BlockChain;
+import org.bitcoinj.core.Coin;
 import org.bitcoinj.core.NetworkParameters;
 import org.bitcoinj.core.PeerGroup;
+import org.bitcoinj.core.ScriptException;
 import org.bitcoinj.core.Transaction;
+import org.bitcoinj.core.TransactionInput;
+import org.bitcoinj.core.TransactionOutput;
 import org.bitcoinj.core.Wallet;
+import org.bitcoinj.core.Wallet.SendRequest;
 import org.bitcoinj.params.TestNet3Params;
 import org.bitcoinj.store.BlockStoreException;
 import org.bitcoinj.store.SPVBlockStore;
 import org.bitcoinj.store.UnreadableWalletException;
-import org.coinjoin.rsa.BlindSignUtil;
+import org.coinjoin.util.RSABlindSignUtil;
 
 public class MainServer {
 
-	public final static double CHUNK_SIZE = 0.01;
+	public final static double CHUNK_SIZE = 1000000;
 	public final static int MIN_PARTICIPANTS = 3;
 	private final static NetworkParameters params = new TestNet3Params();
 	
@@ -43,7 +49,7 @@ public class MainServer {
 	// Map TXIDs to Transactions
 	private HashMap<Integer, TxWrapper> transactionMap;
 	// Incoming HTTPS Server
-	private HttpsListener httpsServer;
+	private SSLListener httpsServer;
 	
 	// BTC Network Interaction Classes
 	private PeerGroup peerGroup;
@@ -53,7 +59,7 @@ public class MainServer {
 	
 	@SuppressWarnings("deprecation")
 	public MainServer(int port, File walletFile, File blockFile) {
-		httpsServer = new HttpsListener(port);
+		httpsServer = new SSLListener(port);
 		transactionMap = new HashMap<Integer, TxWrapper>();
 		
 		// Set up Local Wallet
@@ -90,14 +96,73 @@ public class MainServer {
 		
 	}
 	
+	public Integer currentOpenID() {
+		for (int txid : transactionMap.keySet()) {
+			if (transactionMap.get(txid).status == TxStatus.OPEN)
+				return txid;
+		}
+		return null;
+	}
+	
 	/**
-	 * Calculates the proper fee for the transaction, adds the fee, then
-	 * 	broadcasts the transaction to the network and sets its status to BROADCAST.
-	 * @param txid: The ID of a fully signed CoinJoin transaction.
+	 * Does one final verification, broadcasts the transaction, and sends it on
+	 * 	its merry way!
+	 * @param wrapper: Previously locked TxWrapper from transactionMap
+	 * @return null on success, or error message
+	 */
+	public String broadcastTransaction(TxWrapper wrapper) {
+		try {
+			wrapper.tx.verify();
+			for(TransactionInput i : wrapper.tx.getInputs())
+				i.verify();
+		} catch (Exception e) {
+			e.printStackTrace();
+			return e.toString();
+		}
+		peerGroup.broadcastTransaction(wrapper.tx);
+		wrapper.status = TxStatus.BROADCAST;
+		return null;
+	}
+	
+	/**
+	 * Calculates the proper fee for the (already locked) transaction and adds/signs the fee.
+	 * @param wrapper: a previously locked transaction in transactionMap
 	 * @return: null on Success, or an Error Message
 	 */
-	public String broadcastTransaction(String txid) {
-		// TODO: complete
+	public String feeTransaction(TxWrapper wrapper) {
+		// Calculate current fee from users.
+		Coin fee = wrapper.tx.getFee();
+		
+		// Calculate minimum fee for transaction
+		long minFee = (wrapper.tx.bitcoinSerialize().length / 1000) * 10000;
+		
+		ArrayList<TransactionInput> inputsToSign = new ArrayList<TransactionInput>();
+		// Loop through wallet looking for fee money
+		for (TransactionOutput t : wallet.calculateAllSpendCandidates(true)) {
+			if(minFee <= fee.value) break;
+			inputsToSign.add(wrapper.tx.addInput(t));
+			fee = wrapper.tx.getFee();
+		}
+		if (minFee > fee.value) {
+			// Not enough fee in wallet!
+			return "Cannot cover transaction fee!";
+		}
+		
+		// Add change for fee money.
+		wrapper.tx.addOutput(Coin.valueOf(fee.value - minFee), wallet.currentReceiveAddress());
+		
+		// Sign fee inputs
+		wallet.signTransaction(SendRequest.forTx(wrapper.tx));
+		
+		// Verify fee inputs
+		for (TransactionInput i : inputsToSign)
+			try {
+				i.verify();
+			} catch (ScriptException e) {
+				e.printStackTrace();
+				return e.toString();
+			}
+		
 		return null;
 	}
 	
@@ -107,7 +172,7 @@ public class MainServer {
 		
 		TxWrapper currentTx = new TxWrapper();
 		
-		currentTx.rsa = BlindSignUtil.freshRSAKeyPair();
+		currentTx.rsa = RSABlindSignUtil.freshRSAKeyPair();
 		currentTx.status = TxStatus.OPEN;
 		currentTx.tx = new Transaction(params);
 		currentTx.mutex = new ReentrantLock();
@@ -139,7 +204,7 @@ public class MainServer {
 							// Create New Open Transaction
 							currentTx = new TxWrapper();
 							
-							currentTx.rsa = BlindSignUtil.freshRSAKeyPair();
+							currentTx.rsa = RSABlindSignUtil.freshRSAKeyPair();
 							currentTx.status = TxStatus.OPEN;
 							currentTx.tx = new Transaction(params);
 							currentTx.mutex = new ReentrantLock();
@@ -217,7 +282,7 @@ public class MainServer {
 		
 		
 		MainServer server = new MainServer(443, new File("wallet.dat"), new File("blockchain.dat"));
-		HttpsAPI.server = server;
+		SSLAPI.server = server;
 		
 		server.start();
 	}

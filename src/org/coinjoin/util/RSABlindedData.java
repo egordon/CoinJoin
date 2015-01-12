@@ -1,8 +1,8 @@
-package org.coinjoin.rsa;
+package org.coinjoin.util;
 
 import java.math.BigInteger;
 
-public class BlindedData {
+public class RSABlindedData {
 	private BigInteger r;
 	private byte[] m;
 	
@@ -14,7 +14,7 @@ public class BlindedData {
 		return m;
 	}
 	
-	public BlindedData(BigInteger r, byte[] m) {
+	public RSABlindedData(BigInteger r, byte[] m) {
 		this.m = m;
 		this.r = r;
 	}

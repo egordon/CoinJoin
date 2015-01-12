@@ -1,22 +1,41 @@
 package org.coinjoin.server;
 
+import java.io.BufferedOutputStream;
 import java.io.BufferedWriter;
-
-import org.bitcoinj.core.Transaction;
+import java.io.IOException;
 import org.bitcoinj.core.TransactionInput;
+import org.bitcoinj.core.TransactionOutput;
+import org.coinjoin.server.MainServer.TxStatus;
+import org.coinjoin.server.MainServer.TxWrapper;
+import org.coinjoin.server.SSLListener.SSLStatus;
+import org.coinjoin.util.RSABlindSignUtil;
 
-public class HttpsAPI {
+public class SSLAPI {
 	
 	public static MainServer server;
 	
 	/**
 	 * @param output: Write the RSA Public Key for a currently OEPN transaction.
 	 * 	and the ID of that transaction.
-	 * @return HTTP Status (200 on Success)
+	 * @return Status
+	 * @throws IOException 
 	 */
-	public static int getPublicRSA(BufferedWriter output){
-		// TODO: Complete
-		return 200;
+	public static SSLStatus getPublicRSA(BufferedOutputStream output) throws IOException{
+		Integer currentOpenID = server.currentOpenID();
+		if (currentOpenID == null) {
+			output.write("Error: no currently open transaction. Please try again later.".getBytes());
+			return SSLStatus.ERR_SERVER;
+		}
+		TxWrapper currentOpen = server.lockTransaction(currentOpenID);
+		if (currentOpen == null) {
+			output.write("Error: transaction does not exist".getBytes());
+			return SSLStatus.ERR_CLIENT;
+		}
+		output.write(currentOpen.rsa.getPublic().getEncoded());
+		
+		
+		server.releaseTransaction(currentOpen);
+		return SSLStatus.OK;
 	};
 	
 	/**
@@ -29,11 +48,37 @@ public class HttpsAPI {
 	 * @param outputAddr: Blinded output address for signing.
 	 * @param inputs: A transaction containing the unsigned input and the change output.
 	 * @param output: Write RSA signed output address if successful.
-	 * @return HTTP Status (200 on Success)
+	 * @return Status
 	 */
-	public static int registerInput(BufferedWriter output, String txid, Transaction inputs, String outputAddr){
-		// TODO: Complete
-		return 200;
+	public static SSLStatus registerInput(BufferedOutputStream output, int txid, 
+			TransactionOutput inputBuilder, TransactionOutput changeOut, byte[] blindedOutput) throws IOException{
+		
+		// Check that input/change address add up to CHUNK_SIZE or bigger
+		if(inputBuilder.getValue().subtract(changeOut.getValue()).value < MainServer.CHUNK_SIZE) {
+			output.write("Error: Input and change address do not add upt to chunk size.".getBytes());
+			return SSLStatus.ERR_CLIENT;
+		}
+		
+		// Check that transaction is open
+		TxWrapper wrapper = server.lockTransaction(txid);
+		if (wrapper == null) {
+			output.write("Error: transaction does not exist.".getBytes());
+			return SSLStatus.ERR_CLIENT;
+		} else if (wrapper.status != TxStatus.OPEN) {
+			output.write("Error: transaction is not longer open.".getBytes());
+			server.releaseTransaction(wrapper);
+			return SSLStatus.ERR_SERVER;
+		}
+		
+		// Add Input and Output to Transaction and write signed output
+		wrapper.tx.addInput(inputBuilder);
+		wrapper.tx.addOutput(changeOut);
+		
+		byte[] retSig = RSABlindSignUtil.signData(wrapper.rsa.getPrivate(), blindedOutput);
+		output.write(retSig);
+		
+		server.releaseTransaction(wrapper);
+		return SSLStatus.OK;
 	};
 	
 	/**
@@ -51,9 +96,9 @@ public class HttpsAPI {
 	 * @param txid: Transaction ID
 	 * @param outputAddr: Unblinded output address to add to transaction.
 	 * @param outputSig: RSA Signature of the Output Address.
-	 * @return HTTP Status (200 on Success)
+	 * @return Status
 	 */
-	public static int registerOutput(BufferedWriter output, String txid, String outputAddr, String outputSig){
+	public static int registerOutput(BufferedWriter output, int txid, String outputAddr, String outputSig){
 		return 200;
 	}
 	

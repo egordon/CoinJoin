@@ -1,4 +1,4 @@
-package org.coinjoin.rsa;
+package org.coinjoin.util;
 
 import java.math.BigInteger;
 import java.security.KeyPair;
@@ -8,7 +8,7 @@ import java.security.SecureRandom;
 import java.security.interfaces.RSAPrivateKey;
 import java.security.interfaces.RSAPublicKey;
 
-public class BlindSignUtil {
+public class RSABlindSignUtil {
 	
 	private static SecureRandom random;
 	
@@ -42,7 +42,7 @@ public class BlindSignUtil {
 				.equals(new BigInteger(data));
 	}
 	
-	public static BlindedData blindData(PublicKey p, byte[] data) {
+	public static RSABlindedData blindData(PublicKey p, byte[] data) {
 		RSAPublicKey pub = (RSAPublicKey)p;
 		byte[] rand = new byte[pub.getModulus().bitLength() / 8];
 		BigInteger r = BigInteger.ONE;
@@ -54,10 +54,10 @@ public class BlindSignUtil {
 		BigInteger bData = ((r.modPow(pub.getPublicExponent(),pub.getModulus()))
 				.multiply(new BigInteger(data))).mod(pub.getModulus());
 		
-		return new BlindedData(r, bData.toByteArray());
+		return new RSABlindedData(r, bData.toByteArray());
 	}
 	
-	public static byte[] unblindSignature(PublicKey p, BlindedData bData, byte[] bSig) {
+	public static byte[] unblindSignature(PublicKey p, RSABlindedData bData, byte[] bSig) {
 		RSAPublicKey pub = (RSAPublicKey)p;
 		BigInteger sig = bData.GetMultiplier().modInverse(pub.getModulus())
 				.multiply(new BigInteger(bSig)).mod(pub.getModulus());
