@@ -31,7 +31,7 @@ import org.coinjoin.util.RSABlindSignUtil;
 public class MainServer {
 
 	public final static long CHUNK_SIZE = 1000000;
-	public final static int MIN_PARTICIPANTS = 1;
+	public final static int MIN_PARTICIPANTS = 2;
 	private final static NetworkParameters params = new TestNet3Params();
 	public final static Lock mutex = new ReentrantLock();
 	

@@ -6,15 +6,21 @@ import java.util.Arrays;
 
 import org.bitcoinj.core.Address;
 import org.bitcoinj.core.Coin;
+import org.bitcoinj.core.ECKey;
 import org.bitcoinj.core.ScriptException;
+import org.bitcoinj.core.Sha256Hash;
 import org.bitcoinj.core.Transaction;
+import org.bitcoinj.core.Transaction.SigHash;
 import org.bitcoinj.core.TransactionInput;
 import org.bitcoinj.core.TransactionOutput;
 import org.bitcoinj.core.Wallet.SendRequest;
+import org.bitcoinj.crypto.TransactionSignature;
+import org.bitcoinj.script.ScriptBuilder;
 import org.coinjoin.server.MainServer.TxStatus;
 import org.coinjoin.util.RSABlindSignUtil;
 import org.coinjoin.util.RSABlindedData;
 
+import wallettemplate.Main;
 import wallettemplate.MainController;
 import javafx.application.Platform;
 import javafx.beans.Observable;
@@ -168,29 +174,34 @@ public class MixStart extends Task {
 		}
 		
 		log("[INFO] Signing Transaction...");
-		if (isThere)
-			wallettemplate.Main.bitcoin.wallet().signTransaction(SendRequest.forTx(toSign));
-		else {
+		int index = -1;
+		if (isThere) {
+			// find input to sign
+			for (index = 0; index < toSign.getInputs().size(); index++) {
+				TransactionInput i = toSign.getInput(index);
+				if (i.getOutpoint().getHash().equals(inputBuilder.getParentTransaction().getHash())) {
+					ECKey signKey = Main.bitcoin.wallet().findKeyFromPubHash(inputBuilder.getScriptPubKey().getPubKeyHash());
+					Sha256Hash sighash = toSign.hashForSignature(index, inputBuilder.getScriptPubKey(), SigHash.ALL, false);
+					ECKey.ECDSASignature mySignature = signKey.sign(sighash);
+					i.setScriptSig(ScriptBuilder.createInputScript(new TransactionSignature(mySignature, SigHash.ALL, false), signKey));
+					break;
+				}
+			}
+		} else {
 			log("[WARN] Output Not Found! Aborting...");
 			finish();
 			return null;
 		}
 		
 		// Search for signed statement
-		TransactionInput finalInput = null;
-		int finalIndex = -1;
-		for(int i = 0; i < toSign.getInputs().size(); i++) {
-			finalInput = toSign.getInput(i);
-			try {
-				finalInput.verify(inputBuilder);
-				finalIndex = i;
-				break;
-			} catch (ScriptException e) {
-				
-			}
-		}
-		if (finalIndex == -1) {
-			log("[ERROR] Could not find signed input! Aborting...");
+		log("[INFO] Verifying Transaction...");
+		TransactionInput finalInput = toSign.getInput(index);
+		int finalIndex = index;
+		finalInput = toSign.getInput(index);
+		try {
+			finalInput.verify(inputBuilder);
+		} catch (ScriptException e) {
+			log("[WARN] Could Not Verify Signature! Aborting...");
 			finish();
 			return null;
 		}
