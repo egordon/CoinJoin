@@ -1,5 +1,7 @@
 package org.coinjoin.server;
 
+import java.util.Arrays;
+
 import org.bitcoinj.core.Address;
 import org.bitcoinj.core.Coin;
 import org.bitcoinj.core.TransactionInput;
@@ -110,6 +112,7 @@ public class SSLAPI {
 	 */
 	public static SSLResponse registerOutput(int txid, Address outputAddr, byte[] outputSig)  {
 		SSLResponse response = new SSLResponse();
+		
 		
 		// Check Transaction Status
 		TxWrapper wrapper = server.lockTransaction(txid);

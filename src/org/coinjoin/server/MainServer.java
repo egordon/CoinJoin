@@ -31,7 +31,7 @@ import org.coinjoin.util.RSABlindSignUtil;
 public class MainServer {
 
 	public final static long CHUNK_SIZE = 1000000;
-	public final static int MIN_PARTICIPANTS = 3;
+	public final static int MIN_PARTICIPANTS = 1;
 	private final static NetworkParameters params = new TestNet3Params();
 	
 	private boolean finished;
@@ -159,12 +159,12 @@ public class MainServer {
 		// Calculate minimum fee for transaction
 		long minFee = (wrapper.tx.bitcoinSerialize().length / 1000) * 10000;
 		
-		ArrayList<TransactionInput> inputsToSign = new ArrayList<TransactionInput>();
+		ArrayList<TransactionOutput> inputsToSign = new ArrayList<TransactionOutput>();
 		// Loop through wallet looking for fee money
 		for (TransactionOutput t : wallet.calculateAllSpendCandidates(true)) {
 			if(minFee <= fee.value) break;
-			inputsToSign.add(wrapper.tx.addInput(t));
-			fee = wrapper.tx.getFee();
+			inputsToSign.add(t);
+			fee.add(t.getValue());
 		}
 		if (minFee > fee.value) {
 			// Not enough fee in wallet!
@@ -174,12 +174,10 @@ public class MainServer {
 		// Add change for fee money.
 		wrapper.tx.addOutput(Coin.valueOf(fee.value - minFee), wallet.currentReceiveAddress());
 		
-		// Sign fee inputs
-		wallet.signTransaction(SendRequest.forTx(wrapper.tx));
-		
-		// Verify fee inputs
-		for (TransactionInput i : inputsToSign)
+		// Sign and Verify fee inputs
+		for (TransactionOutput o: inputsToSign)
 			try {
+				TransactionInput i = wrapper.tx.addSignedInput(o, wallet.findKeyFromPubHash(o.getScriptPubKey().getPubKeyHash()));
 				i.verify();
 			} catch (ScriptException e) {
 				e.printStackTrace();
@@ -223,7 +221,7 @@ public class MainServer {
 				try {
 					switch(wrapper.status) {
 					case OPEN:
-						if (wrapper.tx.getInputs().size() > MIN_PARTICIPANTS) {
+						if (wrapper.tx.getInputs().size() >= MIN_PARTICIPANTS) {
 							wrapper.status = TxStatus.PENDING;
 							
 							// Create New Open Transaction

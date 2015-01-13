@@ -1,11 +1,14 @@
 package wallettemplate.utils;
 
 import org.bitcoinj.core.*;
+
 import javafx.application.Platform;
 import javafx.beans.property.ReadOnlyDoubleProperty;
 import javafx.beans.property.ReadOnlyObjectProperty;
 import javafx.beans.property.SimpleDoubleProperty;
 import javafx.beans.property.SimpleObjectProperty;
+import javafx.collections.FXCollections;
+import javafx.collections.ObservableList;
 
 import java.util.Date;
 
@@ -13,11 +16,13 @@ import java.util.Date;
  * A class that exposes relevant bitcoin stuff as JavaFX bindable properties.
  */
 public class BitcoinUIModel {
+	private final long CHUNK_SIZE = 1000000;
     private SimpleObjectProperty<Address> address = new SimpleObjectProperty<>();
     private SimpleObjectProperty<Coin> balance = new SimpleObjectProperty<>(Coin.ZERO);
     private SimpleDoubleProperty syncProgress = new SimpleDoubleProperty(-1);
     private ProgressBarUpdater syncProgressUpdater = new ProgressBarUpdater();
-
+    private ObservableList<TransactionOutput> outputs = FXCollections.observableArrayList();
+    
     public BitcoinUIModel() {
     }
 
@@ -39,6 +44,12 @@ public class BitcoinUIModel {
     private void update(Wallet wallet) {
         balance.set(wallet.getBalance());
         address.set(wallet.currentReceiveAddress());
+        outputs.setAll(wallet.calculateAllSpendCandidates(true));
+        for (Object obj : outputs.toArray()) {
+        	TransactionOutput output = (TransactionOutput)obj;
+        	if (output.getValue().getValue() < CHUNK_SIZE) outputs.remove(obj);
+        }
+        
     }
 
     private class ProgressBarUpdater extends DownloadProgressTracker {
@@ -66,4 +77,9 @@ public class BitcoinUIModel {
     public ReadOnlyObjectProperty<Coin> balanceProperty() {
         return balance;
     }
+    
+    public ObservableList<TransactionOutput> getOutputs() {
+    	return outputs;
+    }
+    
 }

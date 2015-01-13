@@ -102,13 +102,6 @@ public class ClickableBitcoinAddress extends AnchorPane {
         if (event.getButton() == MouseButton.SECONDARY || (event.getButton() == MouseButton.PRIMARY && event.isMetaDown())) {
             // User right clicked or the Mac equivalent. Show the context menu.
             addressMenu.show(addressLabel, event.getScreenX(), event.getScreenY());
-        } else {
-            // User left clicked.
-            try {
-                Desktop.getDesktop().browse(URI.create(uri()));
-            } catch (IOException e) {
-                GuiUtils.informationalAlert("Opening wallet app failed", "Perhaps you don't have one installed?");
-            }
         }
     }
 

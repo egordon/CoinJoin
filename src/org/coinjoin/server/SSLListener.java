@@ -3,11 +3,11 @@ package org.coinjoin.server;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.net.ServerSocket;
+import java.net.Socket;
 import java.util.ArrayList;
 
-import javax.net.ssl.SSLServerSocket;
-import javax.net.ssl.SSLServerSocketFactory;
-import javax.net.ssl.SSLSocket;
+import javax.net.ServerSocketFactory;
 
 import org.bitcoinj.core.Address;
 import org.bitcoinj.core.TransactionInput;
@@ -44,13 +44,13 @@ public class SSLListener extends Thread {
 	@Override
 	public void run() {
 		System.out.println("Starting SSL Server on: " + port);
-		SSLServerSocket sslserversocket = null;
-		SSLServerSocketFactory sslserversocketfactory = null;
+		ServerSocket serversocket = null;
+		ServerSocketFactory serversocketfactory = null;
 		try {
-		 sslserversocketfactory =
-                 (SSLServerSocketFactory) SSLServerSocketFactory.getDefault();
-         sslserversocket =
-                 (SSLServerSocket) sslserversocketfactory.createServerSocket(port);
+		 serversocketfactory =
+                 (ServerSocketFactory) ServerSocketFactory.getDefault();
+         serversocket =
+                 (ServerSocket) serversocketfactory.createServerSocket(port);
 		} catch (Exception e) {
 			// Fatal Error
 			e.printStackTrace();
@@ -58,17 +58,17 @@ public class SSLListener extends Thread {
 		}
 		
 		// Listen Forever
-		SSLSocket sslsocket;
+		Socket socket;
 		ArrayList<SSLRunner> runners = new ArrayList<SSLRunner>();
 		while(true) {
 			try {
-				sslsocket = (SSLSocket) sslserversocket.accept();
+				socket = (Socket) serversocket.accept();
 			} catch (Exception e) {
 				e.printStackTrace();
 				continue;
 			}
 			// Add New Runner
-			runners.add(new SSLRunner(sslsocket));
+			runners.add(new SSLRunner(socket));
 			runners.get(runners.size()-1).start();
 			
 			// Clean Up Dead Threads
@@ -83,9 +83,9 @@ public class SSLListener extends Thread {
 
 	protected class SSLRunner extends Thread {
 		
-		private SSLSocket socket;
+		private Socket socket;
 		
-		public SSLRunner(SSLSocket socket) {
+		public SSLRunner(Socket socket) {
 			this.socket = socket;
 		}
 		
@@ -100,6 +100,7 @@ public class SSLListener extends Thread {
 			ObjectOutputStream oos = null;
 			SSLResponse response;
 			try {
+				System.out.println("Reading API Call...");
 				// Get Streams
 				ois = new ObjectInputStream(socket.getInputStream());
 				oos = new ObjectOutputStream(socket.getOutputStream());

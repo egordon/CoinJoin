@@ -24,7 +24,7 @@ public class RSABlindSignUtil {
 			e.printStackTrace();
 			System.exit(1);
 		}
-		kpg.initialize(2048);
+		kpg.initialize(2048, new SecureRandom());
 	}
 	
 	public static KeyPair freshRSAKeyPair() {
@@ -38,17 +38,21 @@ public class RSABlindSignUtil {
 	 * @return
 	 */
 	public static byte[] signData(PrivateKey p, byte[] blinded) {
-		BigInteger sig = new BigInteger(blinded);
+		BigInteger data = new BigInteger(1, blinded);
 		RSAPrivateKey privKey = (RSAPrivateKey)p;
-		sig = sig.modPow(privKey.getPrivateExponent(), privKey.getModulus());
+		BigInteger sig = data.modPow(privKey.getPrivateExponent(), privKey.getModulus());
 		return sig.toByteArray();
 	}
 	
 	public static boolean verifyData(PublicKey p, byte[] data, byte[] signature) {
 		RSAPublicKey pub = (RSAPublicKey)p;
 		
-		return (new BigInteger(signature).modPow(pub.getPublicExponent(), pub.getModulus()))
-				.equals(new BigInteger(data));
+		BigInteger s = new BigInteger(1, signature);
+		BigInteger e = pub.getPublicExponent();
+		BigInteger n = pub.getModulus();
+		BigInteger m = new BigInteger(1, data);
+		
+		return s.modPow(e, n).equals(m);
 	}
 	
 	public static RSABlindedData blindData(PublicKey p, byte[] data) {
@@ -61,7 +65,7 @@ public class RSABlindSignUtil {
 		}
 		
 		BigInteger bData = ((r.modPow(pub.getPublicExponent(),pub.getModulus()))
-				.multiply(new BigInteger(data))).mod(pub.getModulus());
+				.multiply(new BigInteger(1, data))).mod(pub.getModulus());
 		
 		return new RSABlindedData(r, bData.toByteArray());
 	}
@@ -69,9 +73,22 @@ public class RSABlindSignUtil {
 	public static byte[] unblindSignature(PublicKey p, RSABlindedData bData, byte[] bSig) {
 		RSAPublicKey pub = (RSAPublicKey)p;
 		BigInteger sig = bData.GetMultiplier().modInverse(pub.getModulus())
-				.multiply(new BigInteger(bSig)).mod(pub.getModulus());
+				.multiply(new BigInteger(1, bSig)).mod(pub.getModulus());
 		
 		return sig.toByteArray();
+	}
+	
+	public static void main(String[] args) {
+		KeyPair keys1 = RSABlindSignUtil.freshRSAKeyPair();
+		KeyPair keys2 = RSABlindSignUtil.freshRSAKeyPair();
+		byte[] data = new byte[256];
+		for(int i = 0; i < data.length; i++) {
+			data[i] = (byte)i;
+		}
+		byte[] signature = RSABlindSignUtil.signData(keys2.getPrivate(), data);
+		boolean good = RSABlindSignUtil.verifyData(keys2.getPublic(), data, signature);
+		if(good) System.out.println("Yay! It worked!");
+		else System.out.println("Boo! It did not work!");
 	}
 
 }

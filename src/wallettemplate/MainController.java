@@ -1,8 +1,11 @@
 package wallettemplate;
 
+import org.bitcoinj.core.Address;
 import org.bitcoinj.core.Coin;
 import org.bitcoinj.core.DownloadProgressTracker;
+import org.bitcoinj.core.TransactionOutput;
 import org.bitcoinj.utils.MonetaryFormat;
+import org.coinjoin.client.MixStart;
 
 import com.subgraph.orchid.TorClient;
 import com.subgraph.orchid.TorInitializationListener;
@@ -11,12 +14,23 @@ import javafx.animation.FadeTransition;
 import javafx.animation.ParallelTransition;
 import javafx.animation.TranslateTransition;
 import javafx.application.Platform;
+import javafx.beans.binding.Bindings;
 import javafx.beans.property.SimpleDoubleProperty;
+import javafx.beans.property.SimpleStringProperty;
+import javafx.beans.property.StringProperty;
 import javafx.event.ActionEvent;
 import javafx.scene.control.Button;
+import javafx.scene.control.ChoiceBox;
 import javafx.scene.control.Label;
+import javafx.scene.control.ListCell;
+import javafx.scene.control.ListView;
+import javafx.scene.control.TextArea;
+import javafx.scene.control.TextField;
+import javafx.scene.control.cell.TextFieldListCell;
 import javafx.scene.layout.HBox;
+import javafx.util.Callback;
 import javafx.util.Duration;
+import javafx.util.StringConverter;
 
 import org.fxmisc.easybind.EasyBind;
 
@@ -36,6 +50,15 @@ public class MainController {
     public Label balance;
     public Button sendMoneyOutBtn;
     public ClickableBitcoinAddress addressControl;
+    public ListView<TransactionOutput> outputSelect;
+    public TextField destination;
+    public Button newDestination, newChange, mixStart;
+    public TextField change;
+    public TextArea debugInfo;
+    
+    private MixStart mix;
+    
+    private Address destAddr, changeAddr;
 
     private BitcoinUIModel model = new BitcoinUIModel();
     private NotificationBarPane.Item syncItem;
@@ -88,6 +111,86 @@ public class MainController {
                 showBitcoinSyncMessage();
             }
         });
+        
+        Bindings.bindContent(outputSelect.getItems(), model.getOutputs());
+        
+        outputSelect.setCellFactory(new Callback<ListView<TransactionOutput>, ListCell<TransactionOutput>>() {
+
+			@Override
+			public ListCell<TransactionOutput> call(
+					ListView<TransactionOutput> param) {
+				return new TextFieldListCell<TransactionOutput>(new StringConverter<TransactionOutput>() {
+
+					@Override
+					public String toString(TransactionOutput object) {
+						return (object.getValue().toPlainString() + " BTC | " + object.getAddressFromP2PKHScript(object.getParams()));
+					}
+
+					@Override
+					public TransactionOutput fromString(String string) {
+						// TODO Auto-generated method stub
+						return null;
+					}
+					
+				});
+			}
+        	
+        });
+        
+        destAddr = Main.bitcoin.wallet().currentReceiveAddress();
+        changeAddr = Main.bitcoin.wallet().getChangeAddress();
+        
+        destination.setEditable(false);
+        destination.setText(destAddr.toString());
+        change.setEditable(false);
+        change.setText(changeAddr.toString());
+        
+        debugInfo.setEditable(false);
+        debugInfo.clear();
+    }
+    
+    public void mixStart(ActionEvent event) {
+    	
+    	newDestination.disableProperty().set(true);
+    	newChange.disableProperty().set(true);
+    	mixStart.disableProperty().set(true);
+    	
+    	debugInfo.clear();
+    	TransactionOutput inputBuilder = outputSelect.getSelectionModel().getSelectedItem();
+    	if (inputBuilder == null){
+    		debugInfo.appendText("[ERROR] No Selected Output!\n");
+        	this.finishMix();
+    	} else {
+	    	
+	    	StringProperty strProp = new SimpleStringProperty();
+	    	strProp.setValue(debugInfo.getText());
+	    	
+	    	debugInfo.textProperty().bind(strProp);
+	    	
+	    	mix = new MixStart(this, strProp, inputBuilder, destAddr, changeAddr);
+	    	
+	    	Thread t = new Thread(mix);
+	    	t.setDaemon(true);
+	    	t.start();
+    	}
+    	
+    }
+    
+    public void finishMix() {
+    	debugInfo.textProperty().unbind();
+    	newDestination.disableProperty().set(false);
+    	newChange.disableProperty().set(false);
+    	mixStart.disableProperty().set(false);
+    }
+    
+    public void updateChange(ActionEvent event) {
+    	changeAddr = Main.bitcoin.wallet().freshReceiveAddress();
+    	change.setText(changeAddr.toString());
+    }
+    
+    public void updateDest(ActionEvent event) {
+    	destAddr = Main.bitcoin.wallet().freshReceiveAddress();
+    	destination.setText(destAddr.toString());
     }
 
     private void showBitcoinSyncMessage() {
