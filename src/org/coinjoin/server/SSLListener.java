@@ -76,9 +76,8 @@ public class SSLListener extends Thread {
 				SSLRunner runner = (SSLRunner) obj;
 				if (!runner.isAlive()) runners.remove(obj);
 			}
+			Thread.yield();
 		}
-         
-		
 	}
 
 	protected class SSLRunner extends Thread {

@@ -85,7 +85,7 @@
                            <children>
                               <Label prefHeight="25.0" prefWidth="84.0" text="Destination:" />
                               <TextField fx:id="destination" prefHeight="25.0" prefWidth="224.0" />
-                              <Button fx:id="newDestination" mnemonicParsing="false" text="New Address" onAction="#updateChange" />
+                              <Button fx:id="newDestination" mnemonicParsing="false" text="New Address" onAction="#updateDest" />
                            </children>
                         </HBox>
                         <GridPane vgap="10.0" GridPane.columnIndex="1" GridPane.rowIndex="1">

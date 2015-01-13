@@ -92,9 +92,7 @@ public class MixStart extends Task {
 		
 		log("[INFO] Registering Input Address...");
 		try {
-			System.out.println(Arrays.toString(destination.getHash160()));
 			blindSig = SSLClient.registerInput(pub.hashCode(), inputBuilder, dummy.getOutput(0), blindAddr.GetData());
-			System.out.println(Arrays.toString(blindSig));
 		} catch (APIException e) {
 			log("[ERROR] Server failed to respond.\n");
 			e.printStackTrace();
@@ -159,15 +157,17 @@ public class MixStart extends Task {
 		}
 				
 		// Sign Transaction
-		log("[INFO] Checking for Output...");
+		log("[INFO] Checking for Output among " + toSign.getOutputs().size() + "...");
 		boolean isThere = false;
 		for(TransactionOutput output : toSign.getOutputs()) {
+			
 			if (output.getAddressFromP2PKHScript(output.getParams()).equals(destination)
 					&& output.getValue().equals(Coin.valueOf(CHUNK_SIZE))) {
 				isThere = true;
 			}
 		}
 		
+		log("[INFO] Signing Transaction...");
 		if (isThere)
 			wallettemplate.Main.bitcoin.wallet().signTransaction(SendRequest.forTx(toSign));
 		else {

@@ -251,7 +251,10 @@ public class SSLAPI {
 		TxWrapper wrapper = server.lockTransaction(txid);
 		if (wrapper == null) {
 			response.retObjects.add(TxStatus.CLEARED);
-		} else response.retObjects.add(wrapper.status);
+		} else {
+			response.retObjects.add(wrapper.status);
+			System.out.println("Return Status: " + wrapper.status.toString());
+		}
 		
 		server.releaseTransaction(wrapper);
 		response.retStatus = SSLStatus.OK;

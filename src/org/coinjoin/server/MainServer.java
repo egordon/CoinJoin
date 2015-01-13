@@ -33,6 +33,7 @@ public class MainServer {
 	public final static long CHUNK_SIZE = 1000000;
 	public final static int MIN_PARTICIPANTS = 1;
 	private final static NetworkParameters params = new TestNet3Params();
+	public final static Lock mutex = new ReentrantLock();
 	
 	private boolean finished;
 	
@@ -47,7 +48,6 @@ public class MainServer {
 		public Transaction tx;
 		public KeyPair rsa;
 		public TxStatus status;
-		public Lock mutex;
 		public int statusTime;
 		public int regOutputs;
 		public int signedInputs;
@@ -196,7 +196,6 @@ public class MainServer {
 		currentTx.rsa = RSABlindSignUtil.freshRSAKeyPair();
 		currentTx.status = TxStatus.OPEN;
 		currentTx.tx = new Transaction(params);
-		currentTx.mutex = new ReentrantLock();
 		currentTx.statusTime = 0;
 		currentTx.regOutputs = 0;
 		currentTx.signedInputs = 0;
@@ -205,6 +204,7 @@ public class MainServer {
 		
 		// Main Server Loop, executed once per second
 		while (!finished) {
+			mutex.lock();
 			/*
 			 * 1. Loop through Transactions, locking each one.
 			 * 2. If transaction is OPEN and has at least 3 participants, mark it PENDING,
@@ -216,12 +216,14 @@ public class MainServer {
 			 * 	from memory.
 			 */
 			
-			for(TxWrapper wrapper : transactionMap.values()) {
-				wrapper.mutex.lock();
+			for(Object obj : transactionMap.values().toArray()) {
+				TxWrapper wrapper = (TxWrapper) obj;
+				System.out.println("Pruning Transactions!");
 				try {
 					switch(wrapper.status) {
 					case OPEN:
 						if (wrapper.tx.getInputs().size() >= MIN_PARTICIPANTS) {
+							System.out.println(wrapper.rsa.getPublic().hashCode() + " is now PENDING");
 							wrapper.status = TxStatus.PENDING;
 							
 							// Create New Open Transaction
@@ -230,7 +232,6 @@ public class MainServer {
 							currentTx.rsa = RSABlindSignUtil.freshRSAKeyPair();
 							currentTx.status = TxStatus.OPEN;
 							currentTx.tx = new Transaction(params);
-							currentTx.mutex = new ReentrantLock();
 							currentTx.statusTime = 0;
 							currentTx.regOutputs = 0;
 							currentTx.signedInputs = 0;
@@ -239,17 +240,17 @@ public class MainServer {
 						}
 						break;
 					case PENDING:
-						if (wrapper.statusTime >= 5)
+						if (wrapper.statusTime >= 50)
 							wrapper.status = TxStatus.FAILED;
 						else wrapper.statusTime++;
 						break;
 					case SIGNING:
-						if (wrapper.statusTime >= 5)
+						if (wrapper.statusTime >= 50)
 							wrapper.status = TxStatus.FAILED;
 						else wrapper.statusTime++;
 						break;
 					case FAILED:
-						if (wrapper.statusTime >= 5) {
+						if (wrapper.statusTime >= 50) {
 							transactionMap.remove(wrapper.rsa.getPublic().hashCode());
 						}
 						else wrapper.statusTime++;
@@ -271,13 +272,12 @@ public class MainServer {
 					}
 					
 				} finally {
-					wrapper.mutex.unlock();
 				}
 			}
 			
-			
+			mutex.unlock();
 			try {
-				Thread.sleep(1000);
+				Thread.sleep(100);
 			} catch (InterruptedException e) {
 				e.printStackTrace();
 			}
@@ -290,8 +290,8 @@ public class MainServer {
 	 * @return TxWrapper corresponding to transaction id.
 	 */
 	public TxWrapper lockTransaction(int txid) {
+		mutex.lock();
 		TxWrapper wrapper = transactionMap.get(txid);
-		wrapper.mutex.lock();
 		return wrapper;
 	}
 	
@@ -300,7 +300,7 @@ public class MainServer {
 	 * @param txid: Transaction ID
 	 */
 	public void releaseTransaction(TxWrapper wrapper) {
-		wrapper.mutex.unlock();
+		mutex.unlock();
 	}
 	
 	@SuppressWarnings("deprecation")
